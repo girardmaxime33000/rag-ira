@@ -1,0 +1,35 @@
+[project]
+name = "rag-ira"
+version = "0.1.0"
+description = "RAG local — statistiques de la profession artistique en France"
+requires-python = ">=3.12"
+dependencies = [
+    "docling>=2.106.0",
+    "langfuse>=4.10.0",
+    "ollama>=0.6.2",
+    "pgvector>=0.4.2",
+    "psycopg[binary]>=3.3.4",
+    "pydantic-settings>=2.14.2",
+    "python-dotenv>=1.2.2",
+    "typer>=0.24.2",
+]
+
+[project.scripts]
+rag-ira = "src.cli:app"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest>=9.1.1",
+    "ruff>=0.15.18",
+]
