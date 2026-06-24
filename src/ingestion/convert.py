@@ -1,13 +1,14 @@
 from pathlib import Path
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode, RapidOcrOptions
 from docling.datamodel.document import DoclingDocument
 
 
 def make_converter() -> DocumentConverter:
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = True
+    pipeline_options.ocr_options = RapidOcrOptions(use_gpu=False)
     pipeline_options.do_table_structure = True
     pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
 
