@@ -7,6 +7,7 @@ from docling.datamodel.document import DoclingDocument
 
 def make_converter() -> DocumentConverter:
     pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_ocr = False  # PDFs textuels uniquement ; évite le conflit RapidOCR/PP-OCRv6
     pipeline_options.do_table_structure = True
     pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
 
