@@ -24,7 +24,7 @@ langfuse-down:
 
 ingest:
 	@test -n "$(FILE)" || (echo "Usage: make ingest FILE=path/to/document.pdf" && exit 1)
-	uv run python -m src.cli ingest $(FILE)
+	uv run python -m src.cli ingest "$(FILE)"
 
 query:
 	@test -n "$(Q)" || (echo "Usage: make query Q='votre question'" && exit 1)
