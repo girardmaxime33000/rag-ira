@@ -9,6 +9,7 @@ from pathlib import Path
 
 import ollama
 from langfuse import Langfuse
+from langfuse.decorators import langfuse_context, observe
 
 from config.settings import settings
 from src.generation.answer import answer
@@ -60,7 +61,6 @@ def run_evaluation() -> None:
     dataset_name = "golden-artistes-auteurs"
     items = [json.loads(l) for l in _GOLDEN.read_text().splitlines() if l.strip()]
 
-    # Create dataset in Langfuse (idempotent)
     try:
         lf.create_dataset(name=dataset_name)
     except Exception:
@@ -72,7 +72,6 @@ def run_evaluation() -> None:
         question = item["question"]
         expected = item["expected_behavior"]
 
-        # Create dataset item
         try:
             lf.create_dataset_item(
                 dataset_name=dataset_name,
@@ -82,14 +81,13 @@ def run_evaluation() -> None:
         except Exception:
             pass
 
-        # Run pipeline
         result = answer(question)
         response_text = result["answer"]
 
-        # Score with local LLM judge
         verdict = judge(question, expected, response_text)
         score = 1.0 if verdict.get("pass") else 0.0
 
+        # Langfuse v4 low-level API
         trace = lf.trace(
             name="eval_run",
             input={"question": question},
