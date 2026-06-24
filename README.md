@@ -116,6 +116,55 @@ eval/
 third_party/langfuse/       Compose officiel Langfuse (self-hosted)
 ```
 
+## Corpus (`data/raw/`)
+
+> Fichiers gitignorés — à placer manuellement dans `data/raw/` après clonage.
+
+### Statut juridique et textes réglementaires
+
+| Fichier | Description |
+|---|---|
+| `Article L382-1 - Code de la sécurité sociale - Légifrance.pdf` | Article fondateur du régime social des artistes-auteurs |
+| `Loi n° 75-1348 du 31 décembre 1975 …pdf` | Loi instituant la sécurité sociale des artistes-auteurs |
+| `Décret n° 2020-1095 du 28 août 2020.pdf` | Décret réforme Urssaf 2020 |
+| `Légifrance - lois 64-1338.pdf` | Loi 64-1338 |
+| `rapports Sénat L25-206.pdf` | Rapport sénatorial |
+
+### Statistiques artistes-auteurs (DEPS / ministère de la Culture)
+
+| Fichier | Description |
+|---|---|
+| `Observatoire des revenus 2019-2021.pdf` | Observatoire des revenus des artistes-auteurs 2019–2021 |
+| `Culture Etudes 2025-6.pdf` | Culture Études 2025-6 |
+| `Culture Études 2022-2.pdf` | Culture Études 2022-2 |
+| `DEPS Culture Chiffres 2024-1.pdf` | DEPS Culture Chiffres 2024-1 |
+| `cartographie des statistiques culturelles 2025-20.pdf` | Cartographie des statistiques culturelles 2025 |
+| `Bilan annuel 2025.pdf` | Bilan annuel 2025 |
+| `rapport_ Racine2020.pdf` | Rapport Racine 2020 — L'auteur et l'acte de création |
+| `Nomenclature_4Nemboites_PCS2003.xls` | Nomenclature PCS 2003 |
+| `Nomenclature_4Nemboites_PCS2020.xlsx` | Nomenclature PCS 2020 |
+
+### Marché de l'art contemporain — Artprice (rapports annuels)
+
+| Fichier | Période |
+|---|---|
+| `report artprice trends2002.pdf` … `report artprice trends2025_en.pdf` | 2002–2025 (séries annuelles, en anglais) |
+| `artprice-contemporary-2011-2012-en.pdf` | 2011–2012 |
+| `artprice-contemporary-2012-2013-en.pdf` | 2012–2013 |
+| `artprice-contemporary-2013-2014-en.pdf` | 2013–2014 |
+| `marché de l'art contemporain 2006:2007.pdf` … `marché de l'art contemporain 20010:2011.pdf` | 2006–2011 (en français) |
+| `the-contemporary-art-market-report-2019.pdf` … `the-contemporary-art-market-report-2025.pdf` | 2019–2025 |
+
+### Marché de l'art — Art Basel / UBS
+
+| Fichier | Description |
+|---|---|
+| `The-Art-Basel-and-UBS-Art-Market-Report-_2021.pdf` | Art Market Report 2021 |
+| `The-Art-Basel-and-UBS-Art-Market-Report-2025.pdf` | Art Market Report 2025 |
+| `Contemporary art market 2009:2010.pdf` | Rapport marché 2009–2010 |
+
+---
+
 ## Garde-fous de génération
 
 Le prompt `prompts/generation.md` impose :
