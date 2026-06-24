@@ -23,13 +23,28 @@ PDF → Docling → route → texte narratif → embed (bge-m3) → pgvector (ch
 - Docker Desktop (ou colima)
 - Python 3.12 + [uv](https://docs.astral.sh/uv/)
 
+## Installation
+
+```bash
+git clone https://github.com/girardmaxime33000/rag-ira.git
+cd rag-ira
+cp .env.example .env
+make setup   # uv sync + ollama pull qwen3:4b et bge-m3
+```
+
+### Dépendances OCR
+
+Docling utilise `rapidocr-onnxruntime` comme backend OCR. Assure-toi que les deux sont dans le venv :
+
+```bash
+uv add rapidocr-onnxruntime onnxruntime
+```
+
+> L'avertissement HuggingFace `unauthenticated requests` au premier lancement est normal — les modèles se téléchargent sans token. Tu peux définir `HF_TOKEN` dans `.env` pour accélérer les téléchargements ultérieurs.
+
 ## Démarrage rapide
 
 ```bash
-cp .env.example .env
-# Éditez .env si nécessaire (clés Langfuse après setup)
-
-make setup       # uv sync + pull modèles Ollama (qwen3:4b, bge-m3)
 make up          # démarre Postgres+pgvector sur :5432
 ```
 
@@ -52,8 +67,11 @@ LANGFUSE_SECRET_KEY=sk-lf-...
 ## Utilisation
 
 ```bash
-# Ingérer un PDF
-make ingest FILE=data/raw/rapport_mda_2022.pdf
+# Déposer les PDFs dans data/raw/, puis ingérer tous les documents
+find data/raw -name "*.pdf" -print0 | xargs -0 -I{} uv run python -m src.cli ingest "{}"
+
+# Ou un seul fichier
+make ingest FILE="data/raw/mon_rapport.pdf"
 
 # Poser une question
 make query Q="Quel est le revenu médian des artistes-auteurs en 2022 ?"
@@ -73,7 +91,7 @@ config/settings.py          Configuration (pydantic-settings)
 src/
   observability/tracing.py  Décorateur @observe → Langfuse
   ingestion/
-    convert.py              Docling PDF → DoclingDocument
+    convert.py              Docling PDF → DoclingDocument (OCR via rapidocr-onnxruntime)
     route.py                Sépare texte (→ chunks) et tableaux (→ facts)
     metadata.py             Extraction métadonnées (règles + LLM)
     load.py                 Écriture Postgres via psycopg
