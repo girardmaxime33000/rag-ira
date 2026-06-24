@@ -8,7 +8,7 @@ from docling.datamodel.document import DoclingDocument
 def make_converter() -> DocumentConverter:
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = True
-    pipeline_options.ocr_options = RapidOcrOptions(use_gpu=False)
+    pipeline_options.ocr_options = RapidOcrOptions()
     pipeline_options.do_table_structure = True
     pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
 
