@@ -25,7 +25,6 @@
 - [Schéma de la base de données](#schéma-de-la-base-de-données)
 - [Garde-fous de génération](#garde-fous-de-génération)
 - [Limitations connues](#limitations-connues)
-- [FAQ & Troubleshooting](#faq--troubleshooting)
 - [Invariantes techniques](#invariantes-techniques)
 - [Contributing](#contributing)
 
@@ -44,6 +43,38 @@ Ce projet construit un RAG local qui :
 - **Trace** chaque appel dans Langfuse pour évaluation et audit
 
 Tout tourne en local sur macOS Apple Silicon (Metal) — aucune donnée ne quitte la machine.
+
+### Cas d'usage
+
+| Cas d'usage | Description |
+|---|---|
+| **Veille réglementaire** | Interroger le corpus juridique (lois, décrets, rapports sénat) pour comprendre l'évolution du statut social des artistes-auteurs depuis 1964 |
+| **Analyse de revenus** | Comparer les revenus artistiques et totaux par segment (arts visuels, spectacle vivant, livre…) sur plusieurs années, avec alertes sur les ruptures de série |
+| **Suivi du marché de l'art** | Analyser les tendances du marché de l'art contemporain (volumes, prix, parts de marché par pays) à partir des rapports Artprice et Art Basel 2002–2025 |
+| **Production de notes de synthèse** | Générer des synthèses thématiques sourcées sur un sujet précis (ex. : évolution des effectifs, poids économique de la culture, comparaison France/monde) |
+| **Préparation d'arguments** | Préparer des argumentaires chiffrés et sourcés pour des rapports, prises de parole ou dossiers de financement |
+| **Détection de pièges statistiques** | Identifier automatiquement les comparaisons hasardeuses (changement de périmètre, confusion moyenne/médiane, mélange €/USD) |
+
+### Types de documentation générables
+
+- **Fiches de synthèse** par segment artistique ou par période, avec sources et périmètres explicites
+- **Chronologies chiffrées** des effectifs ou revenus sur longue période, avec signalement des ruptures de série
+- **Notes de positionnement** comparant la France à d'autres marchés (UK, USA, Chine) sur le marché de l'art
+- **Rapports d'évolution** du cadre réglementaire (MDA → Agessa → Urssaf) et de ses impacts statistiques
+- **Tableaux de bord** exportables à partir des données structurées de la table `facts`
+
+### APIs à intégrer (roadmap)
+
+Le corpus statique (PDFs) a vocation à être complété par des flux de données en temps réel. Les intégrations prioritaires identifiées :
+
+| API / Source | Données disponibles | Intérêt |
+|---|---|---|
+| **Urssaf** — API Déclaratif | Cotisants artistes-auteurs, revenus déclarés, effectifs par secteur | Mise à jour annuelle des données de référence post-2020 |
+| **data.gouv.fr** | Jeux de données ouverts culture, emploi, fiscalité | Accès aux fichiers DEPS, Observatoire des revenus, nomenclatures PCS |
+| **INSEE** — API Données | Séries longues emploi culturel, revenus, PCS | Contextualisation macroéconomique et comparaisons sectorielles |
+| **data.culture.gouv.fr** | Données ouvertes du Ministère de la Culture | Statistiques officielles DEPS, subventions, établissements culturels |
+| **Artprice API** | Prix d'adjudication, indices de marché, données par artiste | Données marché de l'art en temps réel (accès payant) |
+| **Banque de France** | Taux de change €/USD historiques | Conversion fiable pour comparaisons internationales |
 
 ---
 
@@ -336,44 +367,6 @@ Le prompt `prompts/generation.md` impose les règles suivantes pour chaque répo
 
 ---
 
-## FAQ & Troubleshooting
-
-### `port is already allocated` au démarrage de Langfuse
-
-Le Postgres du RAG occupe déjà le port 5432. Le Postgres de Langfuse est remappé sur 5433 — c'est le comportement attendu. Vérifie que les deux stacks sont bien séparées.
-
-### `ValueError: Unsupported configuration: torch.PP-OCRv6.det.small`
-
-Le backend OCR torch est installé à la place de onnxruntime. Corrige avec :
-```bash
-pip uninstall rapidocr -y
-uv add rapidocr-onnxruntime onnxruntime
-```
-
-### `ModuleNotFoundError: No module named 'langfuse.decorators'`
-
-Version de Langfuse trop ancienne dans le venv système. Utilise toujours `uv run` :
-```bash
-uv run python -m src.cli query "..."
-```
-
-### `NotNullViolation: null value in column "doc_type"`
-
-Le LLM n'a pas extrait le type de document. Le fallback `"rapport"` s'applique automatiquement depuis la version courante — fais un `git pull` et réessaie.
-
-### `RapidOCR returned empty result`
-
-Normal pour les pages sans texte (images, pages blanches, graphiques). Docling continue le traitement, ces pages sont ignorées.
-
-### `WARNING: Package(s) not found: langfuse`
-
-Langfuse n'est pas dans le Python système mais il est dans le venv uv — c'est normal. Utilise `uv run` pour toutes les commandes.
-
-### L'ingestion est très lente
-
-Docling charge les modèles TableFormer depuis HuggingFace au premier lancement (~770 poids). Les lancements suivants sont rapides (cache local). L'OCR sur des PDFs de 100+ pages peut prendre plusieurs minutes.
-
----
 
 ## Structure du projet
 
