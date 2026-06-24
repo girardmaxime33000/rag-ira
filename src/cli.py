@@ -30,9 +30,9 @@ def ingest(path: Path = typer.Argument(..., help="Chemin vers un fichier PDF à 
 
     sha = sha256_file(path)
     doc_id = upsert_document(
-        title=llm_meta.get("title", path.stem),
+        title=llm_meta.get("title") or path.stem,
         source=file_meta["source"],
-        doc_type=llm_meta.get("doc_type", "rapport"),
+        doc_type=llm_meta.get("doc_type") or "rapport",
         annee_publication=file_meta.get("annee_publication"),
         path=path,
         sha256=sha,
