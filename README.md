@@ -1,186 +1,465 @@
-# RAG-IRA — RAG local sur les statistiques de la profession artistique en France
+# RAG-IRA
 
-RAG 100 % local sur un corpus de rapports et études sur la profession artistique en France
-(artistes-auteurs, marché de l'art, poids économique de la culture).
+![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
+![Ollama](https://img.shields.io/badge/Ollama-qwen3%3A4b%20%7C%20bge--m3-black?logo=ollama)
+![Postgres](https://img.shields.io/badge/Postgres-16%20%2B%20pgvector-336791?logo=postgresql)
+![Langfuse](https://img.shields.io/badge/Observabilité-Langfuse-orange)
+![Licence](https://img.shields.io/badge/Licence-MIT-green)
+![100% local](https://img.shields.io/badge/Cloud-0%25-brightgreen)
+
+> **RAG 100 % local sur les statistiques de la profession artistique en France.**
+> Interroge un corpus de rapports officiels, d'études sectorielles et de données de marché
+> sans envoyer une seule donnée à un service cloud.
+
+---
+
+## Table des matières
+
+- [Pourquoi ce projet ?](#pourquoi-ce-projet-)
+- [Architecture](#architecture)
+- [Prérequis](#prérequis)
+- [Installation](#installation)
+- [Démarrage rapide](#démarrage-rapide)
+- [Utilisation](#utilisation)
+- [Corpus](#corpus-dataraw)
+- [Schéma de la base de données](#schéma-de-la-base-de-données)
+- [Garde-fous de génération](#garde-fous-de-génération)
+- [Limitations connues](#limitations-connues)
+- [FAQ & Troubleshooting](#faq--troubleshooting)
+- [Invariantes techniques](#invariantes-techniques)
+- [Contributing](#contributing)
+
+---
+
+## Pourquoi ce projet ?
+
+Les statistiques sur la profession artistique en France sont éparpillées dans des dizaines de rapports hétérogènes — DEPS, Urssaf, Artprice, Art Basel, rapports parlementaires — avec des **ruptures de série documentées**, des périmètres incomparables et des unités mélangées (€ courants, € constants, USD). Un LLM classique ne connaît pas ces données récentes et ne peut pas alerter sur les pièges statistiques.
+
+Ce projet construit un RAG local qui :
+
+- **Ingère** ces documents via Docling (extraction de texte et de tableaux)
+- **Sépare** strictement les tableaux chiffrés (→ SQL) du texte narratif (→ vecteurs)
+- **Répond** aux questions en citant systématiquement source, année et périmètre
+- **Avertit** automatiquement quand une comparaison temporelle traverse une rupture de série
+- **Trace** chaque appel dans Langfuse pour évaluation et audit
+
+Tout tourne en local sur macOS Apple Silicon (Metal) — aucune donnée ne quitte la machine.
+
+---
 
 ## Architecture
 
 ```
-PDF → Docling → route → texte narratif → embed (bge-m3) → pgvector (chunks)
-                      → tableaux chiffrés → SQL (facts) ← jamais embeddés
-                                                   ↓
-                     Query → router → vector.py | structured.py
-                                              ↓
-                              qwen3:4b (Ollama) → réponse annotée
-                                              ↓
-                                         Langfuse (traces + eval)
+PDF
+ └─► Docling (TableFormer ACCURATE)
+       ├─► TextItem  ──► embed (bge-m3, 1024d) ──► pgvector  (table chunks)
+       └─► TableItem ──────────────────────────► SQL         (table facts)
+                                                      │
+                          ┌───────────────────────────┘
+                          ▼
+              Question utilisateur
+                    │
+                    ▼
+              router.py  ──classify──►  qualitative  ──► vector.py
+                                    ►  quantitative  ──► structured.py
+                                    ►  hybride       ──► les deux
+                    │
+                    ▼
+         Contexte assemblé (chunks + facts + series_breaks)
+                    │
+                    ▼
+         qwen3:4b (Ollama) + prompts/generation.md
+                    │
+                    ▼
+         Réponse annotée (source | année | périmètre)
+                    │
+                    ▼
+         Langfuse (traces + évaluation LLM-as-judge)
 ```
+
+---
 
 ## Prérequis
 
-- macOS Apple Silicon (ou Linux x86)
-- [Ollama](https://ollama.ai) installé sur l'hôte
-- Docker Desktop (ou colima)
-- Python 3.12 + [uv](https://docs.astral.sh/uv/)
+| Outil | Version | Rôle |
+|---|---|---|
+| macOS Apple Silicon | — | Accélération Metal pour Ollama |
+| [Ollama](https://ollama.ai) | ≥ 0.6 | LLM + embeddings en local |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | ≥ 4.x | Postgres/pgvector + Langfuse |
+| Python | 3.12 | Runtime applicatif |
+| [uv](https://docs.astral.sh/uv/) | ≥ 0.4 | Gestion des dépendances Python |
+
+---
 
 ## Installation
+
+### 1. Cloner le dépôt
 
 ```bash
 git clone https://github.com/girardmaxime33000/rag-ira.git
 cd rag-ira
-cp .env.example .env
-make setup   # uv sync + ollama pull qwen3:4b et bge-m3
 ```
 
-### Dépendances OCR
+### 2. Configurer l'environnement
 
-Docling utilise `rapidocr-onnxruntime` comme backend OCR. Assure-toi que les deux sont dans le venv :
+```bash
+cp .env.example .env
+```
+
+Édite `.env` et renseigne tes clés Langfuse (voir [Démarrage rapide](#démarrage-rapide)) :
+
+```env
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_LLM_MODEL=qwen3:4b
+OLLAMA_EMBED_MODEL=bge-m3
+EMBED_DIM=1024
+RAG_DB_DSN=postgresql://rag:rag@localhost:5432/rag
+LANGFUSE_HOST=http://localhost:3000
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+```
+
+### 3. Installer les dépendances Python
+
+```bash
+make setup
+# équivalent à : uv sync + ollama pull qwen3:4b + ollama pull bge-m3
+```
+
+### 4. Dépendances OCR
+
+Docling utilise `rapidocr-onnxruntime` comme backend OCR :
 
 ```bash
 uv add rapidocr-onnxruntime onnxruntime
 ```
 
-> L'avertissement HuggingFace `unauthenticated requests` au premier lancement est normal — les modèles se téléchargent sans token. Tu peux définir `HF_TOKEN` dans `.env` pour accélérer les téléchargements ultérieurs.
+> **Note :** L'avertissement `unauthenticated requests to HF Hub` au premier lancement est normal.
+> Les modèles Docling (TableFormer, layout) se téléchargent automatiquement depuis HuggingFace.
+> Définis `HF_TOKEN` dans `.env` pour accélérer les téléchargements ultérieurs.
+
+---
 
 ## Démarrage rapide
 
-```bash
-make up          # démarre Postgres+pgvector sur :5432
-```
-
-### Langfuse (observabilité — optionnel mais recommandé)
-
-Langfuse tourne dans sa propre stack Docker, **séparée** de celle du RAG.
-Elle embarque Postgres, ClickHouse, Redis et MinIO.
+### Infrastructure RAG (Postgres + pgvector)
 
 ```bash
-# Éditer les secrets dans third_party/langfuse/docker-compose.yml (chercher # CHANGEME)
-make langfuse-up   # démarre Langfuse sur http://localhost:3000
+make up
+# démarre Postgres 16 + pgvector sur localhost:5432
+# applique db/schema.sql et db/seed_series_breaks.sql automatiquement
 ```
 
-Créez un projet dans l'UI Langfuse, copiez les clés dans `.env` :
+### Langfuse (observabilité)
+
+Langfuse tourne dans une **stack Docker séparée** (Postgres, ClickHouse, Redis, MinIO) :
+
+```bash
+# 1. Éditer les secrets dans third_party/langfuse/docker-compose.yml (chercher # CHANGEME)
+# 2. Démarrer
+make langfuse-up
+# Interface disponible sur http://localhost:3000
 ```
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_SECRET_KEY=sk-lf-...
-```
+
+1. Ouvre [http://localhost:3000](http://localhost:3000) — crée ton compte (premier compte = admin)
+2. Crée un projet → **Settings → API Keys** → génère une paire de clés
+3. Colle les clés dans `.env`
+
+---
 
 ## Utilisation
 
+### Ingestion de documents
+
 ```bash
-# Déposer les PDFs dans data/raw/, puis ingérer tous les documents
+# Déposer les PDFs dans data/raw/, puis ingérer (gère les espaces dans les noms)
 find data/raw -name "*.pdf" -print0 | xargs -0 -I{} uv run python -m src.cli ingest "{}"
 
-# Ou un seul fichier
+# Ingérer un fichier unique
 make ingest FILE="data/raw/mon_rapport.pdf"
+```
 
-# Poser une question
+L'ingestion :
+1. Convertit le PDF via Docling (OCR si nécessaire)
+2. Sépare texte narratif → `chunks` et tableaux → `facts` (invariante stricte)
+3. Extrait les métadonnées via le LLM (année, périmètre, unité…)
+4. Calcule les embeddings bge-m3 et stocke dans Postgres
+
+### Interrogation
+
+```bash
 make query Q="Quel est le revenu médian des artistes-auteurs en 2022 ?"
+make query Q="Comment a évolué le marché de l'art contemporain entre 2010 et 2023 ?"
+make query Q="Quelle est la part de Paris dans le marché de l'art mondial ?"
+```
 
-# Lancer l'évaluation sur le golden dataset
+### Évaluation
+
+```bash
 make eval
-
-# Tests et lint
-make test
-make lint
+# Lance les 5 questions-pièges du golden dataset
+# Score via LLM-as-judge (Ollama) + résultats dans Langfuse
+# Exit 1 si un piège n'est pas détecté
 ```
 
-## Structure
+### Développement
 
+```bash
+make test   # pytest
+make lint   # ruff + mypy
 ```
-config/settings.py          Configuration (pydantic-settings)
-src/
-  observability/tracing.py  Décorateur @observe → Langfuse
-  ingestion/
-    convert.py              Docling PDF → DoclingDocument (OCR via rapidocr-onnxruntime)
-    route.py                Sépare texte (→ chunks) et tableaux (→ facts)
-    metadata.py             Extraction métadonnées (règles + LLM)
-    load.py                 Écriture Postgres via psycopg
-  embeddings/embedder.py    Ollama bge-m3, vérifie dim=1024
-  retrieval/
-    vector.py               Recherche pgvector + filtres metadata
-    structured.py           Requêtes SQL sur facts + series_breaks
-    router.py               Classifie la requête → bon backend
-  generation/
-    llm.py                  Ollama qwen3:4b, tracé Langfuse
-    answer.py               Assemble contexte + prompt + garde-fous
-  cli.py                    Typer : ingest | query | eval
-db/
-  schema.sql                Schéma Postgres (documents, chunks, facts, series_breaks)
-  seed_series_breaks.sql    Ruptures de série pré-chargées
-prompts/
-  metadata_extraction.md    Prompt extraction métadonnées
-  generation.md             Prompt génération avec garde-fous
-eval/
-  golden_dataset.jsonl      5 questions-pièges
-  run_eval.py               Évaluation LLM-as-judge (Ollama) + Langfuse
-third_party/langfuse/       Compose officiel Langfuse (self-hosted)
-```
+
+---
 
 ## Corpus (`data/raw/`)
 
-> Fichiers gitignorés — à placer manuellement dans `data/raw/` après clonage.
+> Les fichiers sont **gitignorés** — à placer manuellement dans `data/raw/` après clonage.
 
-### Statut juridique et textes réglementaires
+### Textes réglementaires et législatifs
 
-| Fichier | Description |
-|---|---|
-| `Article L382-1 - Code de la sécurité sociale - Légifrance.pdf` | Article fondateur du régime social des artistes-auteurs |
-| `Loi n° 75-1348 du 31 décembre 1975 …pdf` | Loi instituant la sécurité sociale des artistes-auteurs |
-| `Décret n° 2020-1095 du 28 août 2020.pdf` | Décret réforme Urssaf 2020 |
-| `Légifrance - lois 64-1338.pdf` | Loi 64-1338 |
-| `rapports Sénat L25-206.pdf` | Rapport sénatorial |
+| Fichier | Contenu | Langue | Année |
+|---|---|---|---|
+| `Article L382-1 - Code de la sécurité sociale…pdf` | Article fondateur du régime social des artistes-auteurs | FR | — |
+| `Loi n° 75-1348 du 31 décembre 1975…pdf` | Loi instituant la sécurité sociale des artistes-auteurs | FR | 1975 |
+| `Décret n° 2020-1095 du 28 août 2020.pdf` | Réforme du recouvrement des cotisations (transfert Urssaf) | FR | 2020 |
+| `Légifrance - lois 64-1338.pdf` | Loi 64-1338 | FR | 1964 |
+| `rapports Sénat L25-206.pdf` | Rapport sénatorial sur le statut des artistes-auteurs | FR | 2025 |
+| `rapport_ Racine2020.pdf` | Rapport Racine — L'auteur et l'acte de création | FR | 2020 |
 
-### Statistiques artistes-auteurs (DEPS / ministère de la Culture)
+### Statistiques officielles (DEPS / Ministère de la Culture)
 
-| Fichier | Description |
-|---|---|
-| `Observatoire des revenus 2019-2021.pdf` | Observatoire des revenus des artistes-auteurs 2019–2021 |
-| `Culture Etudes 2025-6.pdf` | Culture Études 2025-6 |
-| `Culture Études 2022-2.pdf` | Culture Études 2022-2 |
-| `DEPS Culture Chiffres 2024-1.pdf` | DEPS Culture Chiffres 2024-1 |
-| `cartographie des statistiques culturelles 2025-20.pdf` | Cartographie des statistiques culturelles 2025 |
-| `Bilan annuel 2025.pdf` | Bilan annuel 2025 |
-| `rapport_ Racine2020.pdf` | Rapport Racine 2020 — L'auteur et l'acte de création |
-| `Nomenclature_4Nemboites_PCS2003.xls` | Nomenclature PCS 2003 |
-| `Nomenclature_4Nemboites_PCS2020.xlsx` | Nomenclature PCS 2020 |
+| Fichier | Contenu | Langue | Période |
+|---|---|---|---|
+| `Observatoire des revenus 2019-2021.pdf` | Revenus des artistes-auteurs (Urssaf) | FR | 2019–2021 |
+| `Culture Etudes 2025-6.pdf` | Étude DEPS 2025-6 | FR | 2025 |
+| `Culture Études 2022-2.pdf` | Étude DEPS 2022-2 | FR | 2022 |
+| `DEPS Culture Chiffres 2024-1.pdf` | Chiffres clés de la culture 2024 | FR | 2024 |
+| `cartographie des statistiques culturelles 2025-20.pdf` | Cartographie des sources statistiques culturelles | FR | 2025 |
+| `Bilan annuel 2025.pdf` | Bilan annuel Urssaf artistes-auteurs | FR | 2025 |
+| `Nomenclature_4Nemboites_PCS2003.xls` | Nomenclature PCS 2003 | FR | 2003 |
+| `Nomenclature_4Nemboites_PCS2020.xlsx` | Nomenclature PCS 2020 | FR | 2020 |
 
-### Marché de l'art contemporain — Artprice (rapports annuels)
+### Marché de l'art — Artprice (rapports annuels)
 
-| Fichier | Période |
-|---|---|
-| `report artprice trends2002.pdf` … `report artprice trends2025_en.pdf` | 2002–2025 (séries annuelles, en anglais) |
-| `artprice-contemporary-2011-2012-en.pdf` | 2011–2012 |
-| `artprice-contemporary-2012-2013-en.pdf` | 2012–2013 |
-| `artprice-contemporary-2013-2014-en.pdf` | 2013–2014 |
-| `marché de l'art contemporain 2006:2007.pdf` … `marché de l'art contemporain 20010:2011.pdf` | 2006–2011 (en français) |
-| `the-contemporary-art-market-report-2019.pdf` … `the-contemporary-art-market-report-2025.pdf` | 2019–2025 |
+| Fichier | Langue | Période |
+|---|---|---|
+| `report artprice trends2002.pdf` → `report artprice trends2025_en.pdf` | EN | 2002–2025 |
+| `artprice-contemporary-2011-2012-en.pdf` | EN | 2011–2012 |
+| `artprice-contemporary-2012-2013-en.pdf` | EN | 2012–2013 |
+| `artprice-contemporary-2013-2014-en.pdf` | EN | 2013–2014 |
+| `marché de l'art contemporain 2006:2007.pdf` → `marché de l'art contemporain 20010:2011.pdf` | FR | 2006–2011 |
+| `the-contemporary-art-market-report-2019.pdf` → `the-contemporary-art-market-report-2025.pdf` | EN | 2019–2025 |
 
 ### Marché de l'art — Art Basel / UBS
 
-| Fichier | Description |
-|---|---|
-| `The-Art-Basel-and-UBS-Art-Market-Report-_2021.pdf` | Art Market Report 2021 |
-| `The-Art-Basel-and-UBS-Art-Market-Report-2025.pdf` | Art Market Report 2025 |
-| `Contemporary art market 2009:2010.pdf` | Rapport marché 2009–2010 |
+| Fichier | Langue | Année |
+|---|---|---|
+| `Contemporary art market 2009:2010.pdf` | EN | 2009–2010 |
+| `The-Art-Basel-and-UBS-Art-Market-Report-_2021.pdf` | EN | 2021 |
+| `The-Art-Basel-and-UBS-Art-Market-Report-2025.pdf` | EN | 2025 |
+
+---
+
+## Schéma de la base de données
+
+```
+documents
+├── doc_id          PK
+├── title           TEXT
+├── source          TEXT
+├── doc_type        TEXT          (rapport, étude, loi, décret…)
+├── annee_publication INT
+├── path            TEXT
+└── sha256          TEXT UNIQUE
+
+chunks                            ← texte narratif uniquement
+├── chunk_id        PK
+├── doc_id          FK → documents
+├── text            TEXT
+├── embedding       vector(1024)  ← index HNSW (cosine)
+└── metadata        JSONB         ← index GIN
+
+facts                             ← tableaux chiffrés uniquement
+├── fact_id         PK
+├── doc_id          FK → documents
+├── metric          TEXT          (ex. effectif_declarants)
+├── value           NUMERIC
+├── unit            TEXT          (€ courants, USD, nombre…)
+├── annee_reference INT           ← année des données, ≠ année de publication
+├── perimetre       TEXT          (ex. France entière, affiliés MDA+Agessa ≤2018)
+├── segment         TEXT          (arts visuels, spectacle vivant…)
+├── statistique     ENUM          (moyenne | mediane | total | part)
+├── nature_revenu   ENUM          (artistique | total | na)
+├── source          TEXT
+└── fiabilite       TEXT
+
+series_breaks                     ← ruptures de série documentées
+├── id              PK
+├── concept         TEXT
+├── periode_avant   TEXT
+├── periode_apres   TEXT
+├── regle           TEXT
+└── avertissement   TEXT          ← affiché automatiquement en cas de comparaison
+```
+
+**Ruptures de série pré-chargées :**
+
+| Concept | Avant | Après | Impact |
+|---|---|---|---|
+| Effectifs artistes-auteurs | ≤ 2018 (MDA+Agessa, affiliés/assujettis) | ≥ 2020 (Urssaf, affiliation dès le 1er euro) | Périmètres non comparables |
+| Recouvrement cotisations | MDA/Agessa | Urssaf Limousin (2019) | Source administrative différente |
 
 ---
 
 ## Garde-fous de génération
 
-Le prompt `prompts/generation.md` impose :
+Le prompt `prompts/generation.md` impose les règles suivantes pour chaque réponse :
 
-1. Chaque chiffre cité → `[source | année_référence | périmètre]`
-2. Comparaison temporelle → avertissement rupture de série si applicable
-3. Revenu artistique ≠ revenu total (~67 % ont un revenu complémentaire)
-4. Moyenne ≠ médiane (distributions très asymétriques)
-5. € ≠ USD (pas de conversion sans source)
-6. "Part de Paris dans le marché de l'art" (USD) ≠ "Part de la culture dans le PIB" (€)
+| Règle | Description |
+|---|---|
+| **Citation obligatoire** | Chaque chiffre → `[source \| année_référence \| périmètre]` |
+| **Ruptures de série** | Avertissement complet avant toute comparaison cross-rupture |
+| **Revenu artistique ≠ total** | ~67 % des artistes-auteurs ont un revenu complémentaire |
+| **Moyenne ≠ médiane** | Distributions très asymétriques — toujours préciser lequel |
+| **€ ≠ USD** | Aucune conversion sans source explicite |
+| **Ambiguïté "part de marché"** | Part de Paris dans le marché de l'art (USD) ≠ part de la culture dans le PIB (€) |
+
+---
+
+## Limitations connues
+
+- **Tableaux non parsés automatiquement** : les tableaux détectés par Docling sont signalés (`⚠️ N tableau(x) détecté(s)`) mais leur insertion dans `facts` nécessite un parseur métier à implémenter par document.
+- **Documents scannés** : l'OCR (RapidOCR onnxruntime) peut retourner des résultats vides sur des pages très dégradées ou en écriture manuscrite. Ces pages sont ignorées silencieusement.
+- **Extraction LLM de métadonnées** : l'extraction automatique via qwen3:4b peut être incomplète — des fallbacks (`"rapport"`, nom du fichier) s'appliquent automatiquement.
+- **Corpus anglophone** : les documents Artprice et Art Basel sont en anglais ; les embeddings bge-m3 sont multilingues mais les requêtes en français peuvent avoir un score de similarité légèrement plus faible sur ces documents.
+- **Facts vides** : sans parseur de tableaux dédié, la table `facts` reste vide et les requêtes quantitatives n'ont pas de données chiffrées structurées.
+
+---
+
+## FAQ & Troubleshooting
+
+### `port is already allocated` au démarrage de Langfuse
+
+Le Postgres du RAG occupe déjà le port 5432. Le Postgres de Langfuse est remappé sur 5433 — c'est le comportement attendu. Vérifie que les deux stacks sont bien séparées.
+
+### `ValueError: Unsupported configuration: torch.PP-OCRv6.det.small`
+
+Le backend OCR torch est installé à la place de onnxruntime. Corrige avec :
+```bash
+pip uninstall rapidocr -y
+uv add rapidocr-onnxruntime onnxruntime
+```
+
+### `ModuleNotFoundError: No module named 'langfuse.decorators'`
+
+Version de Langfuse trop ancienne dans le venv système. Utilise toujours `uv run` :
+```bash
+uv run python -m src.cli query "..."
+```
+
+### `NotNullViolation: null value in column "doc_type"`
+
+Le LLM n'a pas extrait le type de document. Le fallback `"rapport"` s'applique automatiquement depuis la version courante — fais un `git pull` et réessaie.
+
+### `RapidOCR returned empty result`
+
+Normal pour les pages sans texte (images, pages blanches, graphiques). Docling continue le traitement, ces pages sont ignorées.
+
+### `WARNING: Package(s) not found: langfuse`
+
+Langfuse n'est pas dans le Python système mais il est dans le venv uv — c'est normal. Utilise `uv run` pour toutes les commandes.
+
+### L'ingestion est très lente
+
+Docling charge les modèles TableFormer depuis HuggingFace au premier lancement (~770 poids). Les lancements suivants sont rapides (cache local). L'OCR sur des PDFs de 100+ pages peut prendre plusieurs minutes.
+
+---
+
+## Structure du projet
+
+```
+.
+├── config/settings.py              Configuration typée (pydantic-settings)
+├── db/
+│   ├── schema.sql                  Schéma Postgres (4 tables + enums + index)
+│   └── seed_series_breaks.sql      Ruptures de série pré-chargées
+├── prompts/
+│   ├── metadata_extraction.md      Prompt extraction de métadonnées
+│   └── generation.md               Prompt de génération avec garde-fous
+├── src/
+│   ├── observability/tracing.py    Décorateur @observe → Langfuse
+│   ├── ingestion/
+│   │   ├── convert.py              Docling PDF → DoclingDocument
+│   │   ├── route.py                Sépare TextItem et TableItem (invariante stricte)
+│   │   ├── metadata.py             Extraction métadonnées (heuristique + LLM)
+│   │   └── load.py                 Écriture Postgres via psycopg
+│   ├── embeddings/embedder.py      Ollama bge-m3, vérifie dim=1024
+│   ├── retrieval/
+│   │   ├── vector.py               Recherche pgvector + filtres JSONB
+│   │   ├── structured.py           Requêtes SQL sur facts + series_breaks
+│   │   └── router.py               Classifie la requête → bon backend
+│   ├── generation/
+│   │   ├── llm.py                  Ollama qwen3:4b, tracé Langfuse
+│   │   └── answer.py               Assemblage contexte + prompt
+│   └── cli.py                      Typer : ingest | query | eval
+├── eval/
+│   ├── golden_dataset.jsonl        5 questions-pièges
+│   └── run_eval.py                 LLM-as-judge (Ollama) + log Langfuse
+├── tests/test_ingestion.py         Tests unitaires (5 tests)
+├── third_party/langfuse/           Compose officiel Langfuse self-hosted
+├── data/
+│   ├── raw/                        PDFs sources (gitignorés)
+│   └── processed/                  Sorties intermédiaires (gitignorées)
+├── docker-compose.yml              Stack RAG (Postgres+pgvector uniquement)
+├── Makefile                        Commandes de référence
+├── pyproject.toml                  Dépendances uv
+└── CLAUDE.md                       Invariantes pour les sessions Claude
+```
+
+---
 
 ## Invariantes techniques
 
-Voir [CLAUDE.md](CLAUDE.md) pour les règles complètes imposées aux sessions Claude.
+Voir [CLAUDE.md](CLAUDE.md) pour le détail complet.
 
-- **100 % local** : zéro appel API cloud
-- **Tableaux jamais dans le vectoriel** : `TableItem` → `facts` SQL uniquement
-- **Pas de LangChain/LlamaIndex** : bibliothèques directes uniquement
-- **Deux stacks Docker séparées** : RAG (`docker-compose.yml`) et Langfuse (`third_party/langfuse/`)
+| Invariante | Règle |
+|---|---|
+| **100 % local** | Zéro appel API cloud (pas d'OpenAI, Anthropic, Cohere, Voyage…) |
+| **Tableaux jamais dans le vectoriel** | `TableItem` → `facts` SQL uniquement, jamais dans `chunks` |
+| **Métadonnées obligatoires** | Tout fait chiffré porte `annee_reference`, `perimetre`, `unite`, `statistique`, `source` |
+| **Ruptures de série** | Toute comparaison cross-rupture déclenche un avertissement |
+| **Stack séparée** | RAG (`docker-compose.yml`) et Langfuse (`third_party/langfuse/`) ne fusionnent jamais |
+| **Pas de LangChain/LlamaIndex** | Bibliothèques directes uniquement |
+
+---
+
+## Contributing
+
+### Conventions
+
+- **Python 3.12**, formaté avec `ruff`, typé avec `mypy`
+- Pas de commentaires évidents — seulement les contraintes non-triviales
+- Pas de LangChain, LlamaIndex, ni aucun framework d'orchestration LLM
+- Toute modification du schéma SQL → mettre à jour `db/schema.sql` et ce README
+
+### Ajouter un document au corpus
+
+1. Dépose le PDF dans `data/raw/`
+2. Lance `make ingest FILE="data/raw/ton_fichier.pdf"`
+3. Si le document contient des tableaux chiffrés importants, implémente un parseur dédié qui insère dans `facts` avec tous les champs obligatoires
+
+### Ajouter une rupture de série
+
+```sql
+INSERT INTO series_breaks (concept, periode_avant, periode_apres, regle, avertissement)
+VALUES ('Nouveau concept', 'Avant ...', 'Après ...', 'Règle de non-comparaison', 'Avertissement affiché à l''utilisateur');
+```
+
+Puis documente-la dans `CLAUDE.md` section 4.
+
+### Lancer les tests
+
+```bash
+make test   # 5 tests unitaires
+make lint   # ruff check + mypy
+```
