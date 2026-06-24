@@ -73,7 +73,6 @@ Le corpus statique (PDFs) a vocation à être complété par des flux de donnée
 | **data.gouv.fr** | Jeux de données ouverts culture, emploi, fiscalité | Accès aux fichiers DEPS, Observatoire des revenus, nomenclatures PCS |
 | **INSEE** — API Données | Séries longues emploi culturel, revenus, PCS | Contextualisation macroéconomique et comparaisons sectorielles |
 | **data.culture.gouv.fr** | Données ouvertes du Ministère de la Culture | Statistiques officielles DEPS, subventions, établissements culturels |
-| **Artprice API** | Prix d'adjudication, indices de marché, données par artiste | Données marché de l'art en temps réel (accès payant) |
 | **Banque de France** | Taux de change €/USD historiques | Conversion fiable pour comparaisons internationales |
 
 ---
