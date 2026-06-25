@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import ollama
+from docling.datamodel.document import DoclingDocument
 from docling_core.types.doc import TableItem
 
 from config.settings import settings
@@ -15,17 +16,17 @@ _VALID_STATISTIQUE = {"moyenne", "mediane", "total", "part"}
 _VALID_NATURE_REVENU = {"artistique", "total", "na"}
 
 
-def _table_to_text(table: TableItem) -> str:
+def _table_to_text(table: TableItem, doc: DoclingDocument | None = None) -> str:
     """Convert a Docling TableItem to a plain-text markdown-like representation."""
     try:
-        df = table.export_to_dataframe()
+        df = table.export_to_dataframe(doc=doc)
         return df.to_string(index=False)
     except Exception:
         pass
 
     # Fallback: use markdown export
     try:
-        return table.export_to_markdown()
+        return table.export_to_markdown(doc=doc)
     except Exception:
         return ""
 
@@ -81,9 +82,10 @@ def extract_facts_from_table(
     *,
     source: str,
     annee_publication: int | None,
+    doc: DoclingDocument | None = None,
 ) -> list[dict[str, Any]]:
     """Ask the LLM to extract structured facts from a single Docling TableItem."""
-    table_text = _table_to_text(table)
+    table_text = _table_to_text(table, doc=doc)
     if not table_text.strip():
         return []
 
@@ -124,12 +126,13 @@ def parse_tables(
     *,
     source: str,
     annee_publication: int | None,
+    doc: DoclingDocument | None = None,
 ) -> list[dict[str, Any]]:
     """Process all tables from a document and return validated facts."""
     all_facts: list[dict[str, Any]] = []
     for i, table in enumerate(tables):
         try:
-            facts = extract_facts_from_table(table, source=source, annee_publication=annee_publication)
+            facts = extract_facts_from_table(table, source=source, annee_publication=annee_publication, doc=doc)
             all_facts.extend(facts)
         except Exception as e:
             print(f"  [table {i+1}] erreur d'extraction : {e}")

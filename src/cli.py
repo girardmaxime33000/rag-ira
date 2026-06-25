@@ -86,6 +86,7 @@ def _ingest_one(path: Path) -> None:
             routed.raw_tables,
             source=file_meta["source"],
             annee_publication=file_meta.get("annee_publication"),
+            doc=routed.doc,
         )
         for fact in facts:
             insert_fact(doc_id=doc_id, **fact)

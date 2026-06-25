@@ -9,6 +9,8 @@ class RoutedContent:
     """Text-only content safe for vector embedding."""
     raw_tables: list[TableItem]
     """Tables to be parsed into structured facts — never embedded."""
+    doc: DoclingDocument
+    """Source document, needed to export tables with full context."""
 
 
 def route_document(doc: DoclingDocument) -> RoutedContent:
@@ -23,4 +25,4 @@ def route_document(doc: DoclingDocument) -> RoutedContent:
             if text:
                 narrative.append(text)
 
-    return RoutedContent(narrative_chunks=narrative, raw_tables=tables)
+    return RoutedContent(narrative_chunks=narrative, raw_tables=tables, doc=doc)
