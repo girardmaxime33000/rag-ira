@@ -11,7 +11,8 @@ def ingest(path: Path = typer.Argument(..., help="Chemin vers un fichier PDF à 
     from src.ingestion.convert import convert_document
     from src.ingestion.route import route_document
     from src.ingestion.metadata import extract_from_filename, extract_with_llm
-    from src.ingestion.load import upsert_document, insert_chunk, sha256_file
+    from src.ingestion.load import upsert_document, insert_chunk, insert_fact, sha256_file
+    from src.ingestion.table_parser import parse_tables
     from src.embeddings.embedder import embed
 
     if not path.exists():
@@ -48,7 +49,17 @@ def ingest(path: Path = typer.Argument(..., help="Chemin vers un fichier PDF à 
             metadata=llm_meta,
         )
 
-    typer.echo(f"⚠️  {len(routed.raw_tables)} tableau(x) détecté(s) → à parser manuellement dans `facts`.")
+    if routed.raw_tables:
+        typer.echo(f"Extraction de {len(routed.raw_tables)} tableau(x) → facts …")
+        facts = parse_tables(
+            routed.raw_tables,
+            source=file_meta["source"],
+            annee_publication=file_meta.get("annee_publication"),
+        )
+        for fact in facts:
+            insert_fact(doc_id=doc_id, **fact)
+        typer.echo(f"  → {len(facts)} fait(s) extrait(s) et insérés dans `facts`.")
+
     typer.echo("Ingestion terminée.")
 
 
