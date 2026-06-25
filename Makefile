@@ -1,4 +1,4 @@
-.PHONY: setup up down langfuse-up langfuse-down ingest query eval test lint
+.PHONY: setup up down langfuse-up langfuse-down ingest ingest-all query eval test lint
 
 OLLAMA_MODELS := qwen3:4b bge-m3
 
@@ -25,6 +25,10 @@ langfuse-down:
 ingest:
 	@test -n "$(FILE)" || (echo "Usage: make ingest FILE=path/to/document.pdf" && exit 1)
 	uv run python -m src.cli ingest "$(FILE)"
+
+ingest-all:
+	@echo "Ingestion séquentielle de tous les PDFs dans data/raw/ …"
+	uv run python -m src.cli ingest-all data/raw/
 
 query:
 	@test -n "$(Q)" || (echo "Usage: make query Q='votre question'" && exit 1)
