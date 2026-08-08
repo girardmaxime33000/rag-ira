@@ -118,7 +118,10 @@ def extract_facts_from_table(
         return []
 
     validated = [_validate_fact(f) for f in raw_facts]
-    return [f for f in validated if f is not None]
+    facts = [f for f in validated if f is not None]
+    for f in facts:
+        f["source"] = source
+    return facts
 
 
 def parse_tables(

@@ -64,3 +64,40 @@ def test_classify_query_types():
 
     assert classify("Raconte-moi l'histoire du statut d'artiste") == QueryType.QUALITATIVE
     assert classify("Combien d'artistes déclarent un revenu moyen en 2022 ?") == QueryType.QUANTITATIVE
+
+
+def test_parse_tables_facts_include_source():
+    """Regression: facts extracted from tables must carry `source`, since
+    insert_fact() requires it (CLAUDE.md §3 — the five mandatory perimeter fields)."""
+    from src.ingestion.table_parser import parse_tables
+    from docling_core.types.doc import TableItem
+
+    fake_response = {
+        "message": {
+            "content": (
+                '```json\n[{"metric": "revenu médian", "value": 15000, '
+                '"unit": "€ courants", "annee_reference": 2022, '
+                '"perimetre": "France entière", "segment": "artistes-auteurs", '
+                '"statistique": "mediane", "nature_revenu": "artistique"}]\n```'
+            )
+        }
+    }
+
+    table = MagicMock(spec=TableItem)
+    table.export_to_dataframe.side_effect = Exception("no dataframe export in stub")
+    table.export_to_markdown.return_value = "| revenu | 15000 |"
+
+    with patch("ollama.chat", return_value=fake_response):
+        facts = parse_tables(
+            [table], source="Rapport Test 2022", annee_publication=2022
+        )
+
+    assert len(facts) == 1
+    fact = facts[0]
+    # The five mandatory fields per CLAUDE.md §3
+    required_fields = (
+        "annee_reference", "perimetre", "unit", "statistique", "nature_revenu", "source",
+    )
+    for field in required_fields:
+        assert field in fact, f"champ obligatoire manquant : {field}"
+    assert fact["source"] == "Rapport Test 2022"
