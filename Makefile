@@ -1,4 +1,4 @@
-.PHONY: setup up down langfuse-up langfuse-down ingest ingest-all query eval test lint
+.PHONY: setup up down langfuse-up langfuse-down webui-up webui-down api ingest ingest-all query eval test lint
 
 OLLAMA_MODELS := qwen3:4b bge-m3
 
@@ -21,6 +21,16 @@ langfuse-up:
 
 langfuse-down:
 	docker compose -f third_party/langfuse/docker-compose.yml down
+
+webui-up:
+	docker compose -f third_party/open-webui/docker-compose.yml up -d
+	@echo "Open WebUI disponible sur http://localhost:3001 (lance 'make api' côté hôte)"
+
+webui-down:
+	docker compose -f third_party/open-webui/docker-compose.yml down
+
+api:
+	uv run python -m src.cli serve
 
 ingest:
 	@test -n "$(FILE)" || (echo "Usage: make ingest FILE=path/to/document.pdf" && exit 1)

@@ -103,8 +103,12 @@ PDF
                     ▼
          Réponse annotée (source | année | périmètre)
                     │
-                    ▼
-         Langfuse (traces + évaluation LLM-as-judge)
+         ┌──────────┴──────────┐
+         ▼                     ▼
+   Langfuse (traces)    src/api/openai_compat.py (/v1/chat/completions)
+                                │
+                                ▼
+                         Open WebUI (Docker, :3001)
 ```
 
 ---
@@ -194,6 +198,25 @@ make langfuse-up
 1. Ouvre [http://localhost:3000](http://localhost:3000) — crée ton compte (premier compte = admin)
 2. Crée un projet → **Settings → API Keys** → génère une paire de clés
 3. Colle les clés dans `.env`
+
+### Open WebUI (interface de chat)
+
+Open WebUI se branche sur le pipeline RAG complet via un shim local compatible OpenAI —
+il ne parle jamais directement à Ollama (voir [CLAUDE.md §8](CLAUDE.md#8-interface-open-webui)).
+
+```bash
+# 1. Démarrer le serveur compatible OpenAI côté hôte
+make api
+# → http://localhost:8000/v1
+
+# 2. Démarrer Open WebUI (stack Docker séparée)
+make webui-up
+# → http://localhost:3001
+```
+
+Dans Open WebUI, le modèle `rag-ira` est automatiquement disponible dans le sélecteur —
+chaque message déclenche le routage retrieval → facts/chunks → génération, avec les
+sources et avertissements de rupture de série affichés en pied de réponse.
 
 ---
 
@@ -393,12 +416,15 @@ Le prompt `prompts/generation.md` impose les règles suivantes pour chaque répo
 │   ├── generation/
 │   │   ├── llm.py                  Ollama qwen3:4b, tracé Langfuse
 │   │   └── answer.py               Assemblage contexte + prompt
-│   └── cli.py                      Typer : ingest | query | eval
+│   ├── api/openai_compat.py        Shim /v1/chat/completions (pour Open WebUI)
+│   └── cli.py                      Typer : ingest | query | eval | serve
 ├── eval/
 │   ├── golden_dataset.jsonl        5 questions-pièges
 │   └── run_eval.py                 LLM-as-judge (Ollama) + log Langfuse
 ├── tests/test_ingestion.py         Tests unitaires (5 tests)
-├── third_party/langfuse/           Compose officiel Langfuse self-hosted
+├── third_party/
+│   ├── langfuse/                   Compose officiel Langfuse self-hosted
+│   └── open-webui/                 Compose Open WebUI (branché sur src/api)
 ├── data/
 │   ├── raw/                        PDFs sources (gitignorés)
 │   └── processed/                  Sorties intermédiaires (gitignorées)
@@ -420,8 +446,9 @@ Voir [CLAUDE.md](CLAUDE.md) pour le détail complet.
 | **Tableaux jamais dans le vectoriel** | `TableItem` → `facts` SQL uniquement, jamais dans `chunks` |
 | **Métadonnées obligatoires** | Tout fait chiffré porte `annee_reference`, `perimetre`, `unite`, `statistique`, `source` |
 | **Ruptures de série** | Toute comparaison cross-rupture déclenche un avertissement |
-| **Stack séparée** | RAG (`docker-compose.yml`) et Langfuse (`third_party/langfuse/`) ne fusionnent jamais |
+| **Stack séparée** | RAG (`docker-compose.yml`), Langfuse et Open WebUI (`third_party/`) ne fusionnent jamais |
 | **Pas de LangChain/LlamaIndex** | Bibliothèques directes uniquement |
+| **Open WebUI = shim local** | `src/api/openai_compat.py` mime le format OpenAI mais route vers Ollama en local, jamais openai.com |
 
 ---
 

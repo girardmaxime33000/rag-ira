@@ -104,6 +104,20 @@ def query(question: str = typer.Argument(..., help="Question en langage naturel"
 
 
 @app.command()
+def serve() -> None:
+    """Démarre le serveur HTTP compatible OpenAI (pour Open WebUI)."""
+    import uvicorn
+
+    from config.settings import settings
+
+    url = f"http://{settings.api_host}:{settings.api_port}/v1"
+    typer.echo(f"Serveur compatible OpenAI sur {url}")
+    uvicorn.run(
+        "src.api.openai_compat:app", host=settings.api_host, port=settings.api_port
+    )
+
+
+@app.command()
 def eval() -> None:
     """Lance l'évaluation sur le golden dataset via Langfuse."""
     from eval.run_eval import run_evaluation
