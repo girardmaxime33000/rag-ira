@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
@@ -6,6 +7,13 @@ from docling.datamodel.document import DoclingDocument
 
 
 _converter: DocumentConverter | None = None
+
+# RapidOCR logs a WARNING ("The text detection result is empty") for every
+# bitmap region it inspects and finds no text in — logos, photos, charts.
+# This is expected on illustrated reports and isn't a sign of missed content
+# (see route_document / facts extraction, which run regardless), so it's
+# silenced down to ERROR to keep ingestion logs readable.
+logging.getLogger("RapidOCR").setLevel(logging.ERROR)
 
 
 def _get_converter() -> DocumentConverter:
