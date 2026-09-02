@@ -64,3 +64,21 @@ def test_classify_query_types():
 
     assert classify("Raconte-moi l'histoire du statut d'artiste") == QueryType.QUALITATIVE
     assert classify("Combien d'artistes déclarent un revenu moyen en 2022 ?") == QueryType.QUANTITATIVE
+
+
+def test_document_exists():
+    """Permet à `ingest-all` d'ignorer un fichier déjà en base (reprise après crash)."""
+    from src.ingestion.load import document_exists
+
+    mock_cursor = MagicMock()
+    mock_cursor.fetchone.return_value = (1,)
+    mock_conn = MagicMock()
+    mock_conn.__enter__.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+    with patch("psycopg.connect", return_value=mock_conn):
+        assert document_exists("deadbeef") is True
+
+    mock_cursor.fetchone.return_value = None
+    with patch("psycopg.connect", return_value=mock_conn):
+        assert document_exists("deadbeef") is False

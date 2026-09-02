@@ -19,6 +19,13 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def document_exists(sha256: str) -> bool:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM documents WHERE sha256 = %s", (sha256,))
+            return cur.fetchone() is not None
+
+
 def upsert_document(
     *,
     title: str,

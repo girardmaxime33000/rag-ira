@@ -386,6 +386,7 @@ Le prompt `prompts/generation.md` impose les règles suivantes pour chaque répo
 - **Extraction LLM de métadonnées** : l'extraction automatique via qwen3:4b peut être incomplète — des fallbacks (`"rapport"`, nom du fichier) s'appliquent automatiquement.
 - **Corpus anglophone** : les documents Artprice et Art Basel sont en anglais ; les embeddings bge-m3 sont multilingues mais les requêtes en français peuvent avoir un score de similarité légèrement plus faible sur ces documents.
 - **Facts vides** : sans parseur de tableaux dédié, la table `facts` reste vide et les requêtes quantitatives n'ont pas de données chiffrées structurées.
+- **Crash natif sur macOS Apple Silicon pendant `ingest-all`** : RapidOCR/onnxruntime peut faire planter le process (`SIGTRAP`, souvent précédé d'un warning `resource_tracker: leaked semaphore`) suite à un `fork()` après init d'un thread Objective-C — bug connu de l'écosystème Python/ObjC sur macOS, pas propre à ce projet. `make ingest`/`make ingest-all` définissent `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` pour contourner. `ingest-all` est **reprenable sans risque** : chaque fichier est vérifié via son sha256 avant conversion, donc relancer la commande après un crash ignore les fichiers déjà en base et reprend là où ça s'est arrêté.
 
 ---
 
