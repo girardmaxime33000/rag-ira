@@ -91,6 +91,9 @@ def insert_fact(
                   (doc_id, metric, value, unit, annee_reference, perimetre,
                    segment, statistique, nature_revenu, source, fiabilite)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (doc_id, metric, value, unit, annee_reference, perimetre,
+                              segment, statistique, nature_revenu, source)
+                DO NOTHING
                 """,
                 (doc_id, metric, value, unit, annee_reference, perimetre,
                  segment, statistique, nature_revenu, source, fiabilite),

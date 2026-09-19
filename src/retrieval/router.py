@@ -1,7 +1,10 @@
+import re
 from enum import Enum
 from typing import Any
 
-from src.retrieval import vector, structured
+from src.retrieval import structured, vector
+
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 
 
 class QueryType(str, Enum):
@@ -37,7 +40,13 @@ def retrieve(query: str, top_k: int = 5) -> dict[str, Any]:
         results["chunks"] = []
 
     if qtype in (QueryType.QUANTITATIVE, QueryType.HYBRID):
-        results["facts"] = structured.query_facts()
+        year_match = _YEAR_RE.search(query)
+        annee_reference = int(year_match.group()) if year_match else None
+        # Sans année explicite, on ne peut pas cibler la table `facts` par mots-clés
+        # (les noms de `metric` sont hétérogènes et ne recoupent pas le vocabulaire
+        # naturel de la question) : `query_facts` applique quand même une LIMIT et
+        # un DISTINCT pour éviter de renvoyer toute la table dans le prompt.
+        results["facts"] = structured.query_facts(annee_reference=annee_reference)
         results["series_breaks"] = structured.get_series_breaks()
     else:
         results["facts"] = []

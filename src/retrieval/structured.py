@@ -13,6 +13,7 @@ def query_facts(
     statistique: str | None = None,
     nature_revenu: str | None = None,
     segment: str | None = None,
+    limit: int | None = 30,
 ) -> list[dict[str, Any]]:
     conditions: list[str] = []
     params: list[Any] = []
@@ -37,12 +38,25 @@ def query_facts(
         params.append(f"%{segment}%")
 
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    limit_clause = "LIMIT %s" if limit else ""
+    if limit:
+        params.append(limit)
+
+    # DISTINCT : une même table réingérée (ou réextraite par le LLM) produit
+    # des lignes strictement identiques dans `facts` ; on ne veut pas les
+    # répéter dans la réponse. `d.title`/`d.source` sont aliasés pour ne pas
+    # écraser silencieusement `f.source` (la source du fait lui-même, exigée
+    # par CLAUDE.md §3) lors du zip colonnes -> dict.
     sql = f"""
-        SELECT f.*, d.title, d.source
+        SELECT DISTINCT
+            f.metric, f.value, f.unit, f.annee_reference, f.perimetre,
+            f.segment, f.statistique, f.nature_revenu, f.source, f.fiabilite,
+            f.doc_id, d.title AS doc_title, d.source AS doc_source
         FROM facts f
         JOIN documents d USING (doc_id)
         {where}
-        ORDER BY annee_reference DESC
+        ORDER BY f.annee_reference DESC
+        {limit_clause}
     """
 
     with psycopg.connect(settings.rag_db_dsn) as conn:
