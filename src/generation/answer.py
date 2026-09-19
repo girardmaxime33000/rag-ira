@@ -8,6 +8,25 @@ from src.observability.tracing import observe
 _GENERATION_PROMPT = (Path(__file__).parent.parent.parent / "prompts" / "generation.md").read_text
 
 
+def _strip_echoed_reference_lines(response: str, *reference_blocks: str) -> str:
+    """Retire du texte généré les lignes qui reproduisent tel quel le matériel de
+    référence injecté dans le prompt (facts/ruptures) : un petit modèle local
+    (qwen3:4b) a tendance à recopier ces blocs bruts en plus de sa propre
+    reformulation, au lieu de s'en servir uniquement comme contexte."""
+    reference_lines = {
+        stripped
+        for block in reference_blocks
+        for line in block.splitlines()
+        if (stripped := line.strip().lstrip("-*").strip())
+    }
+    kept = [
+        line
+        for line in response.splitlines()
+        if line.strip().lstrip("-*").strip() not in reference_lines
+    ]
+    return "\n".join(kept).strip()
+
+
 @observe(name="answer_query")
 def answer(query: str) -> dict[str, Any]:
     context = retrieve(query)
@@ -38,6 +57,7 @@ def answer(query: str) -> dict[str, Any]:
     )
 
     response = generate(prompt)
+    response = _strip_echoed_reference_lines(response, facts_text, breaks_text)
     return {
         "query": query,
         "query_type": context["query_type"],
