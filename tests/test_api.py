@@ -12,7 +12,15 @@ _FAKE_RESULT = {
     "query_type": "quantitative",
     "answer": "Le revenu médian est de 15 000 €.",
     "sources": {
-        "chunks": [],
+        "chunks": [
+            {
+                "chunk_id": 1,
+                "doc_id": 1,
+                "text": "Extrait narratif.",
+                "doc_source": "Observatoire des revenus 2019-2021",
+                "score": 0.82,
+            }
+        ],
         "facts": [
             {
                 "metric": "revenu_median",
@@ -59,6 +67,10 @@ def test_chat_completions_non_streaming():
     # Series-break warning and facts must surface for the user, not be silently dropped.
     assert "Périmètres non comparables" in content
     assert "Urssaf" in content
+    # Regression: chunk sources must resolve via documents.source, not show up
+    # as "source inconnue" (chunks.metadata never carried a `source` key).
+    assert "Observatoire des revenus 2019-2021" in content
+    assert "source inconnue" not in content
 
 
 def test_chat_completions_requires_user_message():

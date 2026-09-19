@@ -68,10 +68,10 @@ def _format_sources(sources: dict[str, Any]) -> str:
 
     chunks = sources.get("chunks") or []
     if chunks:
-        chunk_lines = [
-            f"- {c.get('metadata', {}).get('source', 'source inconnue')}"
-            for c in chunks
-        ]
+        chunk_lines = []
+        for c in chunks:
+            src = c.get("doc_source") or c.get("metadata", {}).get("source")
+            chunk_lines.append(f"- {src or 'source inconnue'}")
         parts.append("**Passages narratifs cités :**\n" + "\n".join(chunk_lines))
 
     if not parts:

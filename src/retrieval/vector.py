@@ -28,11 +28,13 @@ def search(
         params = [str(vector)] + params[1:-1] + [top_k]
 
     sql = f"""
-        SELECT chunk_id, doc_id, text, metadata,
-               1 - (embedding <=> %s::vector) AS score
+        SELECT chunks.chunk_id, chunks.doc_id, chunks.text, chunks.metadata,
+               documents.source AS doc_source, documents.title AS doc_title,
+               1 - (chunks.embedding <=> %s::vector) AS score
         FROM chunks
-        {filter_clause}
-        ORDER BY embedding <=> %s::vector
+        JOIN documents ON documents.doc_id = chunks.doc_id
+        {filter_clause.replace("metadata", "chunks.metadata")}
+        ORDER BY chunks.embedding <=> %s::vector
         LIMIT %s
     """
     params = [str(vector)] + (params[1:-1] if metadata_filter else []) + [str(vector), top_k]
