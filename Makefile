@@ -22,12 +22,15 @@ langfuse-up:
 langfuse-down:
 	docker compose -f third_party/langfuse/docker-compose.yml down
 
+# --env-file explicite : par défaut docker compose cherche le .env dans le
+# dossier du fichier -f (third_party/open-webui/), pas à la racine du repo,
+# donc RAG_IRA_API_PORT/RAG_IRA_API_KEY ne seraient jamais lus sans ça.
 webui-up:
-	docker compose -f third_party/open-webui/docker-compose.yml up -d
+	docker compose -f third_party/open-webui/docker-compose.yml --env-file .env up -d
 	@echo "Open WebUI disponible sur http://localhost:3001 (lance 'make api' côté hôte)"
 
 webui-down:
-	docker compose -f third_party/open-webui/docker-compose.yml down
+	docker compose -f third_party/open-webui/docker-compose.yml --env-file .env down
 
 api:
 	uv run python -m src.cli serve
