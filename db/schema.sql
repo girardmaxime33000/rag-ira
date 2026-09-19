@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS facts (
     nature_revenu   nature_revenu_type NOT NULL DEFAULT 'na',
     source          TEXT NOT NULL,
     fiabilite       TEXT NOT NULL DEFAULT 'normale',
-    UNIQUE (doc_id, metric, value, unit, annee_reference, perimetre, segment, statistique, nature_revenu, source)
+    CONSTRAINT facts_natural_key_unique
+        UNIQUE (doc_id, metric, value, unit, annee_reference, perimetre, segment, statistique, nature_revenu, source)
 );
 
 CREATE TABLE IF NOT EXISTS series_breaks (
