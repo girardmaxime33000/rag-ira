@@ -8,6 +8,7 @@ Respecter ces règles dans **tout** le code généré, sans exception.
 - Génération et embeddings : **Ollama uniquement** (hôte, `http://localhost:11434`)
 - Modèles : `qwen3:4b` (LLM) et `bge-m3` (embeddings, 1024 dim)
 - **Interdit** : OpenAI, Anthropic, Voyage, Cohere, HuggingFace Inference API, ou toute autre API d'inférence externe
+- **Exception documentée** : `src/api/openai_compat.py` expose un endpoint `/v1/chat/completions` au format de câblage OpenAI, uniquement pour brancher Open WebUI (voir §8). C'est un shim local — il n'appelle jamais openai.com, il route vers `answer()` → Ollama. Ne pas confondre avec un appel API cloud.
 
 ## 2. Tableaux chiffrés → jamais dans le vectoriel
 
@@ -45,16 +46,21 @@ Ruptures actuelles :
 | Ollama | Hôte (Metal) | `http://localhost:11434` |
 | Postgres + pgvector (RAG) | Docker | `localhost:5432` |
 | Langfuse (observabilité) | Docker séparé | `http://localhost:3000` |
+| Serveur API compatible OpenAI (`make api`) | Hôte (Metal) | `http://localhost:8000` |
+| Open WebUI | Docker séparé | `http://localhost:3001` |
 
-Les deux `docker-compose.yml` sont **séparés** :
+Trois `docker-compose.yml` **séparés**, jamais fusionnés :
 - RAG : `docker-compose.yml` (racine)
 - Langfuse : `third_party/langfuse/docker-compose.yml`
+- Open WebUI : `third_party/open-webui/docker-compose.yml`
 
-**Ne jamais fusionner les deux composes.**
+**Ne jamais fusionner les composes entre eux.**
 
 ## 6. Stack verrouillée — pas de LangChain/LlamaIndex
 
-Bibliothèques autorisées : `docling`, `ollama`, `psycopg`, `pgvector`, `langfuse`, `pydantic-settings`, `typer`, `python-dotenv`.
+Bibliothèques autorisées : `docling`, `ollama`, `psycopg`, `pgvector`, `langfuse`, `pydantic-settings`, `typer`, `python-dotenv`, `fastapi`, `uvicorn`.
+
+`fastapi`/`uvicorn` servent uniquement le shim `/v1/chat/completions` local (§8) — pas d'appel réseau externe, pas d'orchestration LLM.
 
 Toute suggestion d'ajouter LangChain, LlamaIndex, ou un framework d'orchestration LLM est à rejeter.
 
@@ -64,9 +70,22 @@ Toute suggestion d'ajouter LangChain, LlamaIndex, ou un framework d'orchestratio
 make setup      # uv sync + ollama pull des modèles
 make up         # démarre Postgres+pgvector
 make langfuse-up  # démarre Langfuse (stack séparée)
+make api        # serveur compatible OpenAI (hôte, pour Open WebUI)
+make webui-up   # démarre Open WebUI (stack séparée)
 make ingest FILE=data/raw/mon_rapport.pdf
 make query Q="Quel est le revenu médian des artistes-auteurs en 2022 ?"
 make eval       # golden dataset via Langfuse
 make test       # pytest
 make lint       # ruff + mypy
 ```
+
+## 8. Interface Open WebUI
+
+- Open WebUI (Docker, `http://localhost:3001`) est une UI de chat qui parle le protocole OpenAI.
+- Il ne contacte **jamais** Ollama ni Postgres directement : il pointe vers `make api`
+  (`src/api/openai_compat.py`, hôte, `http://localhost:8000/v1`), qui exécute le pipeline RAG
+  complet (`router.py` → `vector.py`/`structured.py` → `answer.py`) puis appelle Ollama en local.
+- Les avertissements de rupture de série (§4) et les métadonnées de périmètre (§3) sont
+  ajoutés en pied de réponse (section `---` après le texte) pour rester visibles dans l'UI.
+- `ENABLE_OLLAMA_API=false` dans le compose Open WebUI : on ne veut pas qu'il court-circuite
+  le pipeline RAG en discutant directement avec Ollama.

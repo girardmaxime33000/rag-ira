@@ -1,0 +1,28 @@
+# Open WebUI — UI de chat pour le RAG rag-ira.
+# Stack Docker séparée (cf. CLAUDE.md §5 : ne jamais fusionner avec docker-compose.yml
+# à la racine ni avec third_party/langfuse/docker-compose.yml).
+#
+# Open WebUI ne parle PAS directement à Ollama ici : il pointe vers le serveur
+# `make api` (src/api/openai_compat.py), qui tourne sur l'hôte et fait tourner
+# le pipeline RAG complet (retrieval + facts + ruptures de série) avant d'appeler
+# Ollama en local. Rien ne quitte la machine — le format OpenAI n'est utilisé que
+# comme protocole de câblage.
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: rag-ira-open-webui
+    ports:
+      - "3001:8080"
+    environment:
+      OPENAI_API_BASE_URL: http://host.docker.internal:${RAG_IRA_API_PORT:-8000}/v1
+      OPENAI_API_KEY: ${RAG_IRA_API_KEY:-rag-ira-local}
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_AUTH: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - open-webui-data:/app/backend/data
+    restart: unless-stopped
+
+volumes:
+  open-webui-data:

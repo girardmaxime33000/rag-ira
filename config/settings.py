@@ -15,5 +15,11 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
 
+    # Serveur HTTP compatible OpenAI (pour brancher Open WebUI) — 100% local,
+    # ne fait que mimer le format de câblage OpenAI, aucun appel externe.
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    api_key: str = "rag-ira-local"
+
 
 settings = Settings()

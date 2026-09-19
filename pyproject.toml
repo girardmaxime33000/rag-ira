@@ -5,6 +5,7 @@ description = "RAG local — statistiques de la profession artistique en France"
 requires-python = ">=3.12"
 dependencies = [
     "docling>=2.106.0",
+    "fastapi>=0.115.0",
     "langfuse>=4.10.0",
     "ollama>=0.6.2",
     "pgvector>=0.4.2",
@@ -12,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",
     "typer>=0.24.2",
+    "uvicorn[standard]>=0.32.0",
 ]
 
 [project.scripts]
@@ -29,6 +31,7 @@ ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "mypy>=2.1.0",
     "pytest>=9.1.1",
     "ruff>=0.15.18",
