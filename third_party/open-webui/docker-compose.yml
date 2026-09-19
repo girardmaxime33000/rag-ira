@@ -14,8 +14,9 @@ services:
     ports:
       - "3001:8080"
     environment:
-      OPENAI_API_BASE_URL: http://host.docker.internal:${RAG_IRA_API_PORT:-8000}/v1
-      OPENAI_API_KEY: ${RAG_IRA_API_KEY:-rag-ira-local}
+      ENABLE_OPENAI_API: "true"
+      OPENAI_API_BASE_URLS: http://host.docker.internal:${RAG_IRA_API_PORT:-8000}/v1
+      OPENAI_API_KEYS: ${RAG_IRA_API_KEY:-rag-ira-local}
       ENABLE_OLLAMA_API: "false"
       WEBUI_AUTH: "true"
     extra_hosts:
