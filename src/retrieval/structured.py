@@ -66,6 +66,35 @@ def query_facts(
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+def get_data_coverage() -> dict[str, Any]:
+    """Agrégats de couverture temporelle de `facts` (années min/max, années
+    disponibles). `query_facts()` trie par année décroissante et tronque avec
+    une LIMIT : un modèle qui ne voit que cet échantillon sous-estime la
+    plage réelle de la base pour les questions du type « quelle est la
+    période exploitable ? ». Cette fonction interroge la table entière pour
+    donner une réponse fiable, indépendamment de la LIMIT appliquée ailleurs.
+    """
+    with psycopg.connect(settings.rag_db_dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT MIN(annee_reference), MAX(annee_reference), COUNT(*) FROM facts"
+            )
+            row = cur.fetchone()
+            annee_min, annee_max, total = row if row else (None, None, 0)
+
+            cur.execute(
+                "SELECT DISTINCT annee_reference FROM facts ORDER BY annee_reference"
+            )
+            annees = [r[0] for r in cur.fetchall()]
+
+    return {
+        "annee_min": annee_min,
+        "annee_max": annee_max,
+        "nombre_facts": total,
+        "annees_disponibles": annees,
+    }
+
+
 def get_series_breaks(concept: str | None = None) -> list[dict[str, Any]]:
     with psycopg.connect(settings.rag_db_dsn) as conn:
         with conn.cursor() as cur:
