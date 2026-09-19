@@ -48,8 +48,10 @@ def retrieve(query: str, top_k: int = 5) -> dict[str, Any]:
         # un DISTINCT pour éviter de renvoyer toute la table dans le prompt.
         results["facts"] = structured.query_facts(annee_reference=annee_reference)
         results["series_breaks"] = structured.get_series_breaks()
+        results["coverage"] = structured.get_data_coverage()
     else:
         results["facts"] = []
         results["series_breaks"] = []
+        results["coverage"] = None
 
     return results

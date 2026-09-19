@@ -48,11 +48,25 @@ def answer(query: str) -> dict[str, Any]:
         for b in context.get("series_breaks", [])
     ) or ""
 
+    coverage = context.get("coverage")
+    if coverage and coverage.get("annee_min") is not None:
+        coverage_text = (
+            f"Les `facts` de la base couvrent les années {coverage['annee_min']} "
+            f"à {coverage['annee_max']} inclus "
+            f"({coverage['nombre_facts']} faits au total). "
+            "Cette plage porte sur la disponibilité des données, pas sur leur "
+            "comparabilité : voir la section Ruptures de série ci-dessous pour "
+            "les périodes non comparables entre elles."
+        )
+    else:
+        coverage_text = "(couverture temporelle non disponible)"
+
     prompt = (
         prompt_template
         .replace("{{QUESTION}}", query)
         .replace("{{CHUNKS}}", chunks_text)
         .replace("{{FACTS}}", facts_text)
+        .replace("{{COVERAGE}}", coverage_text)
         .replace("{{SERIES_BREAKS}}", breaks_text)
     )
 
@@ -66,5 +80,6 @@ def answer(query: str) -> dict[str, Any]:
             "chunks": context.get("chunks", []),
             "facts": context.get("facts", []),
             "series_breaks": context.get("series_breaks", []),
+            "coverage": coverage,
         },
     }

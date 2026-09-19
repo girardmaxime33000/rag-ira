@@ -1,5 +1,7 @@
 """Tests purs (sans I/O) pour la déduplication du texte généré."""
-from src.generation.answer import _strip_echoed_reference_lines
+from unittest.mock import patch
+
+from src.generation.answer import _strip_echoed_reference_lines, answer
 
 
 def test_strip_echoed_reference_lines_removes_raw_blocks():
@@ -28,3 +30,35 @@ def test_strip_echoed_reference_lines_keeps_own_prose():
     response = "Le revenu médian est de 15 000 € [Urssaf | 2022 | France entière]."
     result = _strip_echoed_reference_lines(response, "- some fact line", "⚠️ some break")
     assert result == response
+
+
+def test_answer_injects_full_coverage_not_truncated_facts_sample():
+    """`query_facts()` ne renvoie qu'un échantillon récent (LIMIT + tri
+    décroissant) : le prompt doit recevoir en plus un agrégat MIN/MAX fiable
+    sur toute la table, pour que les questions de plage de données ne soient
+    pas répondues seulement à partir de l'échantillon tronqué."""
+    fake_context = {
+        "query_type": "hybrid",
+        "chunks": [],
+        "facts": [
+            {
+                "metric": "prix_vente", "annee_reference": 2025,
+                "perimetre": "non précisé", "statistique": "total",
+                "value": 68320000, "unit": "USD", "source": "artprice",
+            }
+        ],
+        "series_breaks": [],
+        "coverage": {
+            "annee_min": 2007, "annee_max": 2025,
+            "nombre_facts": 1500, "annees_disponibles": [2007, 2025],
+        },
+    }
+
+    with patch("src.generation.answer.retrieve", return_value=fake_context), \
+         patch("src.generation.answer.generate") as mock_generate:
+        mock_generate.return_value = "Réponse factice."
+        result = answer("Quelle est la plage de données exploitable ?")
+
+    sent_prompt = mock_generate.call_args[0][0]
+    assert "2007" in sent_prompt and "2025" in sent_prompt
+    assert result["sources"]["coverage"]["annee_min"] == 2007
