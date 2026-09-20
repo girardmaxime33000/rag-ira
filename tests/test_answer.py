@@ -1,7 +1,7 @@
 """Tests purs (sans I/O) pour la déduplication du texte généré."""
 from unittest.mock import patch
 
-from src.generation.answer import _strip_echoed_reference_lines, answer
+from src.generation.answer import _strip_echoed_reference_lines, answer, format_sources
 
 
 def test_strip_echoed_reference_lines_removes_raw_blocks():
@@ -47,6 +47,54 @@ def test_strip_echoed_reference_lines_tolerates_near_verbatim_echo():
     assert "Il existe une rupture de série à signaler." in result
 
 
+def test_strip_echoed_reference_lines_handles_glued_paragraph():
+    """Cas réel observé en production (Open WebUI) : le modèle colle plusieurs
+    avertissements longs à la suite sur UN SEUL paragraphe, sans saut de ligne
+    entre eux. Une comparaison ligne à ligne ne peut pas isoler chaque
+    avertissement dans ce bloc fusionné ; la recherche par fenêtre glissante
+    doit les retirer quand même."""
+    break1 = (
+        "⚠️ Effectifs artistes-auteurs : Périmètres non comparables : changement "
+        "de définition statistique en 2019-2020. Avant 2019 : seuls les "
+        "artistes-auteurs affiliés ou assujettis à la MDA ou à l'Agessa sont "
+        "comptés. À partir de 2020 : tout artiste-auteur déclarant un revenu "
+        "artistique est inclus (affiliation dès le 1er euro, gestion par "
+        "l'Urssaf). L'augmentation des effectifs observée ne reflète pas une "
+        "hausse réelle de l'activité."
+    )
+    break2 = (
+        "⚠️ Recouvrement cotisations : Source administrative différente : le "
+        "recouvrement des cotisations sociales des artistes-auteurs a été "
+        "transféré de la MDA et de l'Agessa à l'Urssaf Limousin en 2019. Les "
+        "statistiques de cotisants antérieures et postérieures à cette date "
+        "ne sont pas directement comparables."
+    )
+    breaks_text = f"{break1}\n{break2}"
+
+    # Un seul bloc de texte, sans saut de ligne entre les deux avertissements
+    # (reformulés légèrement : point au lieu de deux-points, ordre inversé).
+    response = (
+        "Il existe deux ruptures de série à signaler. "
+        "⚠️ Effectifs artistes-auteurs : Périmètres non comparables. Changement "
+        "de définition statistique en 2019-2020. Avant 2019 : seuls les "
+        "artistes-auteurs affiliés ou assujettis à la MDA ou à l'Agessa sont "
+        "comptés. À partir de 2020 : tout artiste-auteur déclarant un revenu "
+        "artistique est inclus (affiliation dès le 1er euro, gestion par "
+        "l'Urssaf). L'augmentation des effectifs observée ne reflète pas une "
+        "hausse réelle de l'activité. ⚠️ Recouvrement cotisations : Source "
+        "administrative différente : le recouvrement des cotisations sociales "
+        "des artistes-auteurs a été transféré de la MDA et de l'Agessa à "
+        "l'Urssaf Limousin en 2019. Les statistiques de cotisants antérieures "
+        "et postérieures à cette date ne sont pas directement comparables."
+    )
+
+    result = _strip_echoed_reference_lines(response, "", breaks_text)
+
+    assert "⚠️" not in result
+    assert "MDA" not in result
+    assert "Il existe deux ruptures de série à signaler." in result
+
+
 def test_strip_echoed_reference_lines_keeps_own_prose():
     """Sans écho brut, la réponse du modèle ne doit pas être altérée."""
     response = "Le revenu médian est de 15 000 € [Urssaf | 2022 | France entière]."
@@ -84,3 +132,23 @@ def test_answer_injects_full_coverage_not_truncated_facts_sample():
     sent_prompt = mock_generate.call_args[0][0]
     assert "2007" in sent_prompt and "2025" in sent_prompt
     assert result["sources"]["coverage"]["annee_min"] == 2007
+
+
+def test_format_sources_renders_coverage_deterministically():
+    """`format_sources()` est la seule source fiable des chiffres de
+    couverture affichés à l'utilisateur (CLI et shim OpenAI compatible la
+    partagent) : le LLM ne doit plus être le canal de transcription de ces
+    nombres (cf. règle 9 du prompt)."""
+    rendered = format_sources({
+        "coverage": {"annee_min": 1953, "annee_max": 2025, "nombre_facts": 1317},
+        "series_breaks": [],
+        "facts": [],
+        "chunks": [],
+    })
+    assert "1953" in rendered
+    assert "2025" in rendered
+    assert "1317" in rendered
+
+
+def test_format_sources_empty_without_sources():
+    assert format_sources({}) == ""

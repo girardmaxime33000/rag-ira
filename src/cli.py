@@ -118,11 +118,11 @@ def _ingest_one(path: Path) -> bool:
 @app.command()
 def query(question: str = typer.Argument(..., help="Question en langage naturel")) -> None:
     """Interroge le RAG et affiche la réponse annotée."""
-    from src.generation.answer import answer
+    from src.generation.answer import answer, format_sources
 
     result = answer(question)
     typer.echo(f"\n[Type de requête : {result['query_type']}]\n")
-    typer.echo(result["answer"])
+    typer.echo(result["answer"] + format_sources(result.get("sources", {})))
 
 
 @app.command()
