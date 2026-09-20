@@ -1,29 +1,53 @@
+import difflib
+import re
 from pathlib import Path
 from typing import Any
 
 from src.generation.llm import generate
-from src.retrieval.router import retrieve
 from src.observability.tracing import observe
+from src.retrieval.router import retrieve
 
 _GENERATION_PROMPT = (Path(__file__).parent.parent.parent / "prompts" / "generation.md").read_text
 
+_ECHO_SIMILARITY_THRESHOLD = 0.85
+
+
+def _normalize_for_echo_match(line: str) -> str:
+    """Réduit une ligne à son contenu textuel comparable : puce, casse,
+    ponctuation et espaces multiples ignorés. Le LLM (temperature=0.1)
+    reproduit rarement les blocs de référence caractère pour caractère —
+    guillemets typographiques, espace insécable ou point final en plus/moins
+    suffisent à faire échouer une comparaison exacte."""
+    line = line.strip().lstrip("-*").strip()
+    line = re.sub(r"[^\w]+", " ", line.lower())
+    return re.sub(r"\s+", " ", line).strip()
+
 
 def _strip_echoed_reference_lines(response: str, *reference_blocks: str) -> str:
-    """Retire du texte généré les lignes qui reproduisent tel quel le matériel de
+    """Retire du texte généré les lignes qui reproduisent le matériel de
     référence injecté dans le prompt (facts/ruptures) : un petit modèle local
-    (qwen3:4b) a tendance à recopier ces blocs bruts en plus de sa propre
-    reformulation, au lieu de s'en servir uniquement comme contexte."""
-    reference_lines = {
-        stripped
+    (qwen3:4b) a tendance à recopier ces blocs en plus de sa propre
+    reformulation, au lieu de s'en servir uniquement comme contexte. La
+    comparaison est approximative (ratio de similarité), pas une égalité
+    stricte, pour rester robuste aux micro-reformulations du modèle."""
+    reference_lines = [
+        normalized
         for block in reference_blocks
         for line in block.splitlines()
-        if (stripped := line.strip().lstrip("-*").strip())
-    }
-    kept = [
-        line
-        for line in response.splitlines()
-        if line.strip().lstrip("-*").strip() not in reference_lines
+        if (normalized := _normalize_for_echo_match(line))
     ]
+
+    def _is_echo(line: str) -> bool:
+        normalized = _normalize_for_echo_match(line)
+        if not normalized:
+            return False
+        return any(
+            difflib.SequenceMatcher(None, normalized, ref).ratio()
+            >= _ECHO_SIMILARITY_THRESHOLD
+            for ref in reference_lines
+        )
+
+    kept = [line for line in response.splitlines() if not _is_echo(line)]
     return "\n".join(kept).strip()
 
 
