@@ -25,6 +25,28 @@ def test_strip_echoed_reference_lines_removes_raw_blocks():
     assert "Il existe une rupture de série" in result
 
 
+def test_strip_echoed_reference_lines_tolerates_near_verbatim_echo():
+    """Cas réel observé en production : le modèle (temperature=0.1) reproduit
+    l'avertissement quasi mot pour mot mais pas caractère pour caractère
+    (guillemet typographique, point final en plus). Une égalité stricte de
+    lignes rate ce cas ; le matching doit être tolérant à ces micro-écarts."""
+    breaks_text = (
+        "⚠️ Effectifs artistes-auteurs : Périmètres non comparables : "
+        "changement de définition statistique en 2019-2020."
+    )
+    # Variante quasi identique : apostrophe typographique + espace en trop.
+    response = (
+        "Il existe une rupture de série à signaler.\n"
+        "⚠️ Effectifs artistes-auteurs : Périmètres non comparables :  "
+        "changement de définition statistique en 2019‑2020."
+    )
+
+    result = _strip_echoed_reference_lines(response, "", breaks_text)
+
+    assert "Périmètres non comparables" not in result
+    assert "Il existe une rupture de série à signaler." in result
+
+
 def test_strip_echoed_reference_lines_keeps_own_prose():
     """Sans écho brut, la réponse du modèle ne doit pas être altérée."""
     response = "Le revenu médian est de 15 000 € [Urssaf | 2022 | France entière]."
