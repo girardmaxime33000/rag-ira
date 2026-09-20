@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from config.settings import settings
-from src.generation.answer import answer
+from src.generation.answer import answer, format_sources
 
 app = FastAPI(title="rag-ira (OpenAI-compatible shim)")
 
@@ -49,39 +49,9 @@ def _last_user_message(messages: list[ChatMessage]) -> str:
     raise HTTPException(status_code=400, detail="Aucun message 'user' dans la requête")
 
 
-def _format_sources(sources: dict[str, Any]) -> str:
-    parts: list[str] = []
-
-    breaks = sources.get("series_breaks") or []
-    if breaks:
-        break_lines = [f"⚠️ {b['concept']} : {b['avertissement']}" for b in breaks]
-        parts.append("\n".join(break_lines))
-
-    facts = sources.get("facts") or []
-    if facts:
-        fact_lines = [
-            f"- {f['metric']} | {f['annee_reference']} | {f['perimetre']} | "
-            f"{f['statistique']} | {f['value']} {f['unit']} | source: {f['source']}"
-            for f in facts
-        ]
-        parts.append("**Faits chiffrés (`facts`) :**\n" + "\n".join(fact_lines))
-
-    chunks = sources.get("chunks") or []
-    if chunks:
-        chunk_lines = []
-        for c in chunks:
-            src = c.get("doc_source") or c.get("metadata", {}).get("source")
-            chunk_lines.append(f"- {src or 'source inconnue'}")
-        parts.append("**Passages narratifs cités :**\n" + "\n".join(chunk_lines))
-
-    if not parts:
-        return ""
-    return "\n\n---\n" + "\n\n".join(parts)
-
-
 def _chat_completion_payload(query: str) -> dict[str, Any]:
     result = answer(query)
-    content = result["answer"] + _format_sources(result.get("sources", {}))
+    content = result["answer"] + format_sources(result.get("sources", {}))
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex}",
         "object": "chat.completion",
