@@ -152,3 +152,19 @@ def test_format_sources_renders_coverage_deterministically():
 
 def test_format_sources_empty_without_sources():
     assert format_sources({}) == ""
+
+
+def test_format_sources_dedupes_chunk_sources():
+    """Plusieurs chunks du top-k viennent souvent du même document : la liste
+    des passages narratifs cités ne doit pas répéter la même source."""
+    rendered = format_sources({
+        "chunks": [
+            {"doc_source": "rapport Racine2020"},
+            {"doc_source": "rapport Racine2020"},
+            {"doc_source": "rapport Racine2020"},
+            {"doc_source": "DEPS Culture Chiffres 2024-1"},
+            {"doc_source": "DEPS Culture Chiffres 2024-1"},
+        ],
+    })
+    assert rendered.count("rapport Racine2020") == 1
+    assert rendered.count("DEPS Culture Chiffres 2024-1") == 1

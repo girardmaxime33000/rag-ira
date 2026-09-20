@@ -137,10 +137,14 @@ def format_sources(sources: dict[str, Any]) -> str:
 
     chunks = sources.get("chunks") or []
     if chunks:
-        chunk_lines = []
+        # Plusieurs chunks du top-k viennent souvent du même document : on
+        # déduplique les sources affichées (plutôt qu'une par chunk) tout en
+        # gardant l'ordre de première apparition.
+        seen: dict[str, None] = {}
         for c in chunks:
             src = c.get("doc_source") or c.get("metadata", {}).get("source")
-            chunk_lines.append(f"- {src or 'source inconnue'}")
+            seen.setdefault(src or "source inconnue", None)
+        chunk_lines = [f"- {src}" for src in seen]
         parts.append("**Passages narratifs cités :**\n" + "\n".join(chunk_lines))
 
     if not parts:
